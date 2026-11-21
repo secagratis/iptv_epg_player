@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Player Italia Pro - EPG & Streaming</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f6ff',
+                            100: '#e0edff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        dark: {
+                            bg: '#0a0d14',
+                            card: '#121722',
+                            border: '#1e2638',
+                            hover: '#1a2234'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome CDN for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- HLS.js for M3U8 Stream Playback -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+    <!-- Custom Styles -->
+    <style>
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0d14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e2638;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+        
+        .glass-panel {
+            background: rgba(18, 23, 34, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .active-channel {
+            border-left: 4px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .pulse-live {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-slate-100 font-sans antialiased h-screen overflow-hidden flex flex-col select-none">
+
+    <!-- TOP HEADER NAVBAR -->
+    <header class="h-16 border-b border-dark-border bg-dark-card/90 px-4 flex items-center justify-between shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-tv text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-none tracking-wide text-white flex items-center gap-2">
+                    IPTV <span class="text-blue-500 text-xs px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20">PRO IT</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">Lettore M3U &amp; Guida TV EPG</p>
+            </div>
+        </div>
+
+        <!-- SEARCH BAR -->
+        <div class="flex-1 max-w-md mx-6 hidden md:block">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="text" id="searchInput" placeholder="Cerca canale o programma in onda..." 
+                       class="w-full bg-dark-bg/80 border border-dark-border rounded-xl pl-10 pr-10 py-2 text-sm focus:outline-none focus:border-blue-500 text-slate-200 placeholder-slate-500 transition">
+                <button id="clearSearchBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ACTIONS & CONTROLS -->
+        <div class="flex items-center gap-2">
+            <button onclick="toggleMobileSidebar()" class="md:hidden p-2 rounded-lg bg-dark-border text-slate-300">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <button onclick="openModal('playlistModal')" class="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition">
+                <i class="fa-solid fa-folder-plus"></i>
+                <span class="hidden sm:inline">Playlist &amp; EPG</span>
+            </button>
+            <button onclick="loadDemoPlaylist()" title="Ricarica Playlist Demo" class="p-2.5 rounded-xl bg-dark-border hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                <i class="fa-solid fa-rotate"></i>
+            </button>
+            <button onclick="openModal('guideModal')" title="Guida TV Griglia" class="p-2.5 rounded-xl bg-dark-border hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                <i class="fa-solid fa-list-ol"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- SIDEBAR: CHANNELS LIST -->
+        <aside id="sidebar" class="w-80 border-r border-dark-border bg-dark-card flex flex-col z-20 absolute md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none">
+            
+            <!-- CATEGORY FILTER & FAVORITES -->
+            <div class="p-3 border-b border-dark-border space-y-2">
+                <div class="md:hidden">
+                    <input type="text" id="mobileSearchInput" placeholder="Cerca canale..." class="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white">
+                </div>
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs" id="categoryContainer">
+                    <!-- Categories injected dynamically -->
+                </div>
+            </div>
+
+            <!-- CHANNEL COUNTER -->
+            <div class="px-3 py-2 text-[11px] font-semibold text-slate-400 bg-dark-bg/40 border-b border-dark-border flex justify-between items-center">
+                <span id="channelCountText">0 canali trovati</span>
+                <span id="activeCategoryText" class="text-blue-400 truncate max-w-[120px]">Tutti</span>
+            </div>
+
+            <!-- CHANNELS LIST -->
+            <div id="channelList" class="flex-1 overflow-y-auto divide-y divide-dark-border/40">
+                <!-- Channel items rendered dynamically -->
+            </div>
+        </aside>
+
+        <!-- MAIN PLAYER AREA -->
+        <main class="flex-1 flex flex-col bg-dark-bg overflow-y-auto">
+
+            <!-- VIDEO PLAYER CONTAINER -->
+            <div class="relative w-full bg-black aspect-video max-h-[60vh] flex items-center justify-center group overflow-hidden shadow-2xl">
+                
+                <video id="videoPlayer" class="w-full h-full object-contain" crossorigin="anonymous" playsinline></video>
+
+                <!-- WATERMARK / STATUS BADGE -->
+                <div class="absolute top-4 left-4 z-10 flex items-center gap-2 pointer-events-none">
+                    <div id="liveBadge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600/90 backdrop-blur-md text-white text-[10px] font-bold tracking-wider uppercase">
+                        <span class="w-2 h-2 rounded-full bg-white pulse-live"></span>
+                        IN DIRETTA
+                    </div>
+                    <div id="qualityBadge" class="hidden px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-slate-300 text-[10px] font-mono border border-white/10">
+                        HD
+                    </div>
+                </div>
+
+                <!-- OVERLAY PLAYER LOADING / ERROR STATUS -->
+                <div id="playerOverlay" class="absolute inset-0 bg-dark-bg/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10">
+                    <div class="w-16 h-16 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-500 text-2xl mb-4">
+                        <i class="fa-solid fa-play"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-1" id="overlayTitle">Seleziona un Canale</h3>
+                    <p class="text-sm text-slate-400 max-w-md mb-6" id="overlayMessage">Scegli un canale dalla lista a sinistra o carica la tua playlist personalizzata M3U.</p>
+                    <button onclick="loadDemoPlaylist()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30 transition">
+                        Carica Playlist Demo
+                    </button>
+                </div>
+
+                <!-- CORS ERROR NOTIFICATION MODAL BANNER -->
+                <div id="corsNotice" class="hidden absolute inset-0 bg-dark-bg/95 p-6 flex flex-col items-center justify-center text-center z-20">
+                    <div class="w-12 h-12 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center text-xl mb-3">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h4 class="text-base font-bold text-white mb-2">Errore di Riproduzione o Blocco CORS</h4>
+                    <p class="text-xs text-slate-300 max-w-lg mb-4 leading-relaxed">
+                        Questo flusso di trasmissione viene bloccato dalle restrizioni di sicurezza del browser (CORS) oppure non è momentaneamente raggiungibile.
+                    </p>
+                    <div class="flex flex-wrap gap-2 justify-center">
+                        <button id="copyUrlBtn" onclick="copyStreamUrl()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700">
+                            <i class="fa-solid fa-copy mr-1"></i> Copia URL Flusso (VLC)
+                        </button>
+                        <button onclick="retryCurrentStream()" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white">
+                            <i class="fa-solid fa-rotate-right mr-1"></i> Riprova
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- CURRENT CHANNEL & EPG PROGRAM DETAILS PANEL -->
+            <div class="p-4 md:p-6 space-y-6">
+
+                <!-- MAIN CHANNEL BAR -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl glass-panel">
+                    <div class="flex items-center gap-4">
+                        <img id="currentLogo" src="https://placehold.co/100x100/1e2638/ffffff?text=TV" alt="Logo" class="w-14 h-14 rounded-xl object-contain bg-black/40 p-2 border border-dark-border shrink-0">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h2 id="currentName" class="text-xl font-bold text-white">Seleziona un canale</h2>
+                                <button id="favCurrentBtn" onclick="toggleFavoriteCurrent()" class="text-slate-500 hover:text-red-500 transition text-lg">
+                                    <i class="fa-regular fa-heart"></i>
+                                </button>
+                            </div>
+                            <p id="currentGroup" class="text-xs text-blue-400 font-medium">Nessuna Categoria</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-dark-border">
+                        <button onclick="prevChannel()" class="px-3 py-2 rounded-xl bg-dark-card hover:bg-dark-hover border border-dark-border text-slate-300 text-xs font-medium flex items-center gap-1.5">
+                            <i class="fa-solid fa-chevron-left"></i> Canale Prec.
+                        </button>
+                        <button onclick="nextChannel()" class="px-3 py-2 rounded-xl bg-dark-card hover:bg-dark-hover border border-dark-border text-slate-300 text-xs font-medium flex items-center gap-1.5">
+                            Canale Succ. <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- EPG CURRENT PROGRAM CARD -->
+                <div class="p-5 rounded-2xl glass-panel space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span> Guida TV - In Onda Ora
+                        </span>
+                        <span id="epgTimeBadge" class="text-xs font-mono text-slate-400 bg-dark-bg px-2.5 py-1 rounded-md border border-dark-border">--:-- - --:--</span>
+                    </div>
+
+                    <div>
+                        <h3 id="epgTitle" class="text-lg font-bold text-white mb-1">Nessun dato EPG disponibile</h3>
+                        <p id="epgDesc" class="text-xs text-slate-400 leading-relaxed max-w-3xl">Seleziona un canale o carica un file XMLTV per visualizzare la programmazione dettagliata.</p>
+                    </div>
+
+                    <!-- PROGRAM PROGRESS BAR -->
+                    <div class="space-y-1.5">
+                        <div class="w-full h-2 bg-dark-bg rounded-full overflow-hidden border border-dark-border">
+                            <div id="epgProgressBar" class="h-full bg-gradient-to-r from-blue-600 to-indigo-500 w-0 transition-all duration-500"></div>
+                        </div>
+                        <div class="flex justify-between text-[11px] font-mono text-slate-500">
+                            <span id="epgStartTime">--:--</span>
+                            <span id="epgProgressPercent">0%</span>
+                            <span id="epgEndTime">--:--</span>
+                        </div>
+                    </div>
+
+                    <!-- UP NEXT PROGRAM PREVIEW -->
+                    <div class="pt-3 border-t border-dark-border/60 flex items-center justify-between text-xs">
+                        <span class="text-slate-400 font-medium">A seguire:</span>
+                        <span id="epgNextTitle" class="text-slate-200 font-semibold truncate max-w-xs md:max-w-md">Nessun programma successivo</span>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: PLAYLIST & EPG UPLOADER -->
+    <div id="playlistModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-dark-card border border-dark-border w-full max-w-xl rounded-2xl p-6 shadow-2xl space-y-6">
+            <div class="flex justify-between items-center border-b border-dark-border pb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-blue-500"></i> Gestione Playlist &amp; Guida EPG
+                </h3>
+                <button onclick="closeModal('playlistModal')" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- TABS -->
+            <div class="flex border-b border-dark-border">
+                <button id="tabM3uBtn" onclick="switchModalTab('m3u')" class="flex-1 py-2 text-xs font-bold border-b-2 border-blue-500 text-blue-400">Playlist M3U</button>
+                <button id="tabEpgBtn" onclick="switchModalTab('epg')" class="flex-1 py-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-white">Guida EPG (XMLTV)</button>
+            </div>
+
+            <!-- TAB 1: M3U -->
+            <div id="tabM3u" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">URL Playlist M3U / M3U8</label>
+                    <input type="url" id="m3uUrlInput" placeholder="https://esempio.com/playlist.m3u" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="text-center text-xs text-slate-500">OPPURE</div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">Carica File Locale (.m3u, .m3u8)</label>
+                    <input type="file" id="m3uFileInput" accept=".m3u,.m3u8" class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer">
+                </div>
+                <button onclick="loadCustomM3U()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/20">
+                    Carica Playlist M3U
+                </button>
+            </div>
+
+            <!-- TAB 2: EPG -->
+            <div id="tabEpg" class="hidden space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">URL Guida TV (XMLTV)</label>
+                    <input type="url" id="epgUrlInput" placeholder="https://esempio.com/epg.xml" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="text-center text-xs text-slate-500">OPPURE</div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">Carica File XMLTV (.xml)</label>
+                    <input type="file" id="epgFileInput" accept=".xml,.xmltv" class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer">
+                </div>
+                <button onclick="loadCustomEPG()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/20">
+                    Carica Guida EPG
+                </button>
+            </div>
+
+            <div class="pt-4 border-t border-dark-border flex justify-between items-center">
+                <button onclick="resetToDemo()" class="text-xs text-red-400 hover:underline">
+                    Ripristina Canali Demo
+                </button>
+                <button onclick="closeModal('playlistModal')" class="px-4 py-2 rounded-xl bg-dark-border text-slate-300 text-xs hover:bg-slate-800">
+                    Chiudi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DETAILED EPG GRID GUIDE -->
+    <div id="guideModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex flex-col p-4 md:p-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-days text-blue-500"></i> Guida TV Programmazione Completa
+                </h2>
+                <p class="text-xs text-slate-400">Palinsesto del giorno per i canali disponibili</p>
+            </div>
+            <button onclick="closeModal('guideModal')" class="p-2 rounded-xl bg-dark-card border border-dark-border text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <div id="guideGridContent" class="flex-1 overflow-y-auto space-y-4 pr-2">
+            <!-- Full EPG schedule rendered here -->
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-blue-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-medium">
+        <i class="fa-solid fa-circle-check text-base"></i>
+        <span id="toastMsg">Notifica salvata</span>
+    </div>
+
+    <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        // ==========================================
+        // DEMO PLAYLIST DATA (PUBLIC RELIABLE HLS STREAMS)
+        // ==========================================
+        const DEMO_PLAYLIST_M3U = `#EXTM3U x-tvg-url="https://epg.it/demo.xml"
+#EXTINF:-1 tvg-id="rai1.it" tvg-name="Rai 1 HD" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Rai_1_logo_%282016%29.svg/512px-Rai_1_logo_%282016%29.svg.png" group-title="Intrattenimento",Rai 1 HD
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="rainews.it" tvg-name="Rai News 24" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Rai_News_24_logo_%282017%29.svg/512px-Rai_News_24_logo_%282017%29.svg.png" group-title="Notizie",Rai News 24
+https://test-streams.mux.dev/dai-discontinuity-deltas/manifest.m3u8
+#EXTINF:-1 tvg-id="canale5.it" tvg-name="Canale 5 HD" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Canale_5_logo_%282018%29.svg/512px-Canale_5_logo_%282018%29.svg.png" group-title="Intrattenimento",Canale 5 HD
+https://cdn.jwplayer.com/manifests/pvh9er8w.m3u8
+#EXTINF:-1 tvg-id="focus.it" tvg-name="Focus Natura HD" tvg-logo="https://placehold.co/120x120/1d4ed8/ffffff?text=FOCUS" group-title="Documentari",Focus Natura HD
+https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8
+#EXTINF:-1 tvg-id="sport24.it" tvg-name="Sport 24 Live" tvg-logo="https://placehold.co/120x120/dc2626/ffffff?text=SPORT" group-title="Sport",Sport 24 Live
+https://playertest.longtailvideo.com/adaptive/oceans/oceans.m3u8
+#EXTINF:-1 tvg-id="radioitalia.it" tvg-name="Radio Italia TV" tvg-logo="https://placehold.co/120x120/16a34a/ffffff?text=MUSIC" group-title="Musica",Radio Italia TV
+https://demo.unified-streaming.com/k8s/features/stable/video/mp4/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="cinema.it" tvg-name="Cinema Premiere" tvg-logo="https://placehold.co/120x120/9333ea/ffffff?text=CINEMA" group-title="Cinema",Cinema Premiere
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`;
+
+        // APP STATE
+        let channels = [];
+        let categories = ['Tutti'];
+        let favorites = JSON.parse(localStorage.getItem('iptv_favorites') || '[]');
+        let currentChannel = null;
+        let currentCategory = 'Tutti';
+        let searchQuery = '';
+        let hlsPlayer = null;
+        let epgData = {}; // tvg-id -> array of programs
+        let epgInterval = null;
+
+        // INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            initEvents();
+            loadSavedOrDemo();
+        });
+
+        function initEvents() {
+            // Search Input listeners
+            const searchInput = document.getElementById('searchInput');
+            const mobileSearchInput = document.getElementById('mobileSearchInput');
+
+            searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+            mobileSearchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+
+            document.getElementById('clearSearchBtn').addEventListener('click', () => {
+                searchInput.value = '';
+                handleSearch('');
+            });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+                
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    togglePlay();
+                } else if (e.code === 'KeyF') {
+                    toggleFullscreen();
+                } else if (e.code === 'ArrowUp') {
+                    e.preventDefault();
+                    prevChannel();
+                } else if (e.code === 'ArrowDown') {
+                    e.preventDefault();
+                    nextChannel();
+                }
+            });
+
+            // Timer to refresh EPG progress bar every minute
+            epgInterval = setInterval(updateEPGProgress, 30000);
+        }
+
+        // ==========================================
+        // M3U & EPG PARSER LOGIC
+        // ==========================================
+        function parseM3U(content) {
+            const lines = content.split(/\r?\n/);
+            const parsedChannels = [];
+            let currentItem = null;
+
+            // Check header for EPG URL
+            const firstLine = lines[0] || '';
+            const headerEpgMatch = firstLine.match(/(?:url-tvg|x-tvg-url)="([^"]+)"/i);
+            if (headerEpgMatch && headerEpgMatch[1]) {
+                const autoEpgUrl = headerEpgMatch[1];
+                console.log('EPG URL trovato nel file M3U:', autoEpgUrl);
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('#EXTINF:')) {
+                    currentItem = {
+                        id: 'chan_' + Math.random().toString(36).substr(2, 9),
+                        tvgId: getAttr(line, 'tvg-id') || '',
+                        name: getAttr(line, 'tvg-name') || line.split(',')[1] || 'Canale Sconosciuto',
+                        logo: getAttr(line, 'tvg-logo') || 'https://placehold.co/100x100/1e2638/ffffff?text=TV',
+                        group: getAttr(line, 'group-title') || 'Generale',
+                        url: ''
+                    };
+                    // Trim name if it contains extra comma details
+                    if (line.includes(',')) {
+                        currentItem.name = line.substring(line.lastIndexOf(',') + 1).trim();
+                    }
+                } else if (line && !line.startsWith('#') && currentItem) {
+                    currentItem.url = line;
+                    parsedChannels.push(currentItem);
+                    currentItem = null;
+                }
+            }
+            return parsedChannels;
+        }
+
+        function getAttr(str, attr) {
+            const regex = new RegExp(`${attr}="([^"]*)"`, 'i');
+            const match = str.match(regex);
+            return match ? match[1] : '';
+        }
+
+        // Dynamic EPG Data Generator for Demo Channels based on local time
+        function generateDemoEPG() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const date = now.getDate();
+
+            const programTemplates = [
+                { title: 'TG Mattina & Meteo', desc: 'Edizione del mattino con le ultime notizie dall\'Italia e dal mondo.', duration: 45, category: 'Notizie' },
+                { title: 'Mattino in Diretta', desc: 'Talk show con ospiti in studio, approfondimenti culturali e costume.', duration: 90, category: 'Intrattenimento' },
+                { title: 'Documentario: Meraviglie della Natura', desc: 'Un viaggio mozzafiato alla scoperta degli ecosistemi più remoti della Terra.', duration: 60, category: 'Documentari' },
+                { title: 'TG Mezzogiorno Flash', desc: 'Notiziario e aggiornamenti in tempo reale.', duration: 30, category: 'Notizie' },
+                { title: 'Film: L\'Ultima Sfida', desc: 'Un avvincente thriller ricco di colpi di scena ed azione spettacolare.', duration: 110, category: 'Cinema' },
+                { title: 'Match Live: Campionato Highlights', desc: 'Sintesi dei momenti salienti e commenti della giornata sportiva.', duration: 75, category: 'Sport' },
+                { title: 'Show in Prima Serata', desc: 'Grande intrattenimento con musica dal vivo, quiz e ospiti d\'eccezione.', duration: 120, category: 'Intrattenimento' },
+                { title: 'TG Notte & Approfondimento', desc: 'Riepilogo dei fatti principali del giorno.', duration: 45, category: 'Notizie' },
+                { title: 'Notte Cinema & Relax', desc: 'Programmazione notturna con grandi classici del cinema.', duration: 120, category: 'Cinema' }
+            ];
+
+            const generatedEPG = {};
+
+            channels.forEach((channel) => {
+                const tvgId = channel.tvgId || channel.name;
+                const schedule = [];
+                
+                // Start generation from 06:00 AM today
+                let startTime = new Date(year, month, date, 6, 0, 0);
+
+                for (let i = 0; i < 10; i++) {
+                    const template = programTemplates[(i + channel.name.length) % programTemplates.length];
+                    const endTime = new Date(startTime.getTime() + template.duration * 60000);
+
+                    schedule.push({
+                        title: template.title,
+                        desc: template.desc,
+                        category: template.category,
+                        startTime: new Date(startTime),
+                        endTime: new Date(endTime)
+                    });
+
+                    startTime = new Date(endTime);
+                }
+
+                generatedEPG[tvgId] = schedule;
+            });
+
+            epgData = generatedEPG;
+        }
+
+        // ==========================================
+        // DATA LOADERS & STORAGE
+        // ==========================================
+        function loadSavedOrDemo() {
+            const savedM3U = localStorage.getItem('iptv_custom_m3u');
+            if (savedM3U) {
+                processM3UContent(savedM3U);
+                showToast('Playlist personalizzata caricata');
+            } else {
+                loadDemoPlaylist();
+            }
+        }
+
+        function loadDemoPlaylist() {
+            processM3UContent(DEMO_PLAYLIST_M3U);
+            showToast('Playlist Demo attivata');
+        }
+
+        function processM3UContent(content) {
+            channels = parseM3U(content);
+            
+            // Extract unique categories
+            const catSet = new Set(['Tutti', 'Preferiti']);
+            channels.forEach(c => {
+                if (c.group) catSet.add(c.group);
+            });
+            categories = Array.from(catSet);
+
+            generateDemoEPG();
+            renderCategories();
+            renderChannelList();
+
+            if (channels.length > 0) {
+                playChannel(channels[0]);
+            }
+        }
+
+        function loadCustomM3U() {
+            const url = document.getElementById('m3uUrlInput').value.trim();
+            const fileInput = document.getElementById('m3uFileInput');
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    localStorage.setItem('iptv_custom_m3u', e.target.result);
+                    processM3UContent(e.target.result);
+                    closeModal('playlistModal');
+                    showToast('Playlist salvata ed applicata');
+                };
+                reader.readAsText(file);
+            } else if (url) {
+                fetch(url)
+                    .then(res => res.text())
+                    .then(data => {
+                        localStorage.setItem('iptv_custom_m3u', data);
+                        processM3UContent(data);
+                        closeModal('playlistModal');
+                        showToast('Playlist scaricata con successo');
+                    })
+                    .catch(err => {
+                        showToast('Errore nel caricamento dell\'URL M3U', 'error');
+                        console.error(err);
+                    });
+            } else {
+                showToast('Inserisci un URL o seleziona un file');
+            }
+        }
+
+        function loadCustomEPG() {
+            const fileInput = document.getElementById('epgFileInput');
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    parseXMLTV(e.target.result);
+                    closeModal('playlistModal');
+                    showToast('Guida EPG XMLTV aggiornata');
+                };
+                reader.readAsText(file);
+            } else {
+                showToast('Seleziona un file XMLTV validato');
+            }
+        }
+
+        function parseXMLTV(xmlString) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+                const programmes = xmlDoc.getElementsByTagName("programme");
+                
+                const newEPG = {};
+
+                for (let prog of programmes) {
+                    const channelId = prog.getAttribute("channel");
+                    const startStr = prog.getAttribute("start");
+                    const stopStr = prog.getAttribute("stop");
+                    
+                    const titleEl = prog.getElementsByTagName("title")[0];
+                    const descEl = prog.getElementsByTagName("desc")[0];
+
+                    const title = titleEl ? titleEl.textContent : 'Programma';
+                    const desc = descEl ? descEl.textContent : 'Nessuna descrizione disponibile.';
+
+                    if (!newEPG[channelId]) newEPG[channelId] = [];
+
+                    newEPG[channelId].push({
+                        title: title,
+                        desc: desc,
+                        startTime: parseXMLTVDate(startStr),
+                        endTime: parseXMLTVDate(stopStr)
+                    });
+                }
+
+                epgData = newEPG;
+                updateEPGDisplay();
+            } catch (e) {
+                console.error('Errore parsing XMLTV:', e);
+                showToast('Errore durante la lettura del file XMLTV');
+            }
+        }
+
+        function parseXMLTVDate(str) {
+            if (!str) return new Date();
+            // Formato YYYYMMDDHHMMSS +HHMM
+            const y = str.substring(0, 4);
+            const m = str.substring(4, 6) - 1;
+            const d = str.substring(6, 8);
+            const h = str.substring(8, 10);
+            const min = str.substring(10, 12);
+            return new Date(y, m, d, h, min);
+        }
+
+        function resetToDemo() {
+            localStorage.removeItem('iptv_custom_m3u');
+            loadDemoPlaylist();
+            closeModal('playlistModal');
+        }
+
+        // ==========================================
+        // UI RENDERING
+        // ==========================================
+        function renderCategories() {
+            const container = document.getElementById('categoryContainer');
+            container.innerHTML = categories.map(cat => `
+                <button onclick="setCategory('${cat}')" 
+                        class="px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${currentCategory === cat ? 'bg-blue-600 text-white shadow-md' : 'bg-dark-bg text-slate-400 hover:text-white hover:bg-slate-800'}">
+                    ${cat === 'Preferiti' ? '<i class="fa-solid fa-heart text-red-500 mr-1"></i>' : ''} ${cat}
+                </button>
+            `).join('');
+        }
+
+        function setCategory(cat) {
+            currentCategory = cat;
+            document.getElementById('activeCategoryText').textContent = cat;
+            renderCategories();
+            renderChannelList();
+        }
+
+        function handleSearch(query) {
+            searchQuery = query.toLowerCase().trim();
+            const clearBtn = document.getElementById('clearSearchBtn');
+            if (searchQuery) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            renderChannelList();
+        }
+
+        function renderChannelList() {
+            const listEl = document.getElementById('channelList');
+            
+            let filtered = channels.filter(c => {
+                const matchesCat = currentCategory === 'Tutti' ? true :
+                                   currentCategory === 'Preferiti' ? favorites.includes(c.id) :
+                                   c.group === currentCategory;
+
+                const matchesSearch = !searchQuery || 
+                                     c.name.toLowerCase().includes(searchQuery) ||
+                                     c.group.toLowerCase().includes(searchQuery);
+
+                return matchesCat && matchesSearch;
+            });
+
+            document.getElementById('channelCountText').textContent = `${filtered.length} canali`;
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="p-8 text-center text-slate-500 space-y-2">
+                        <i class="fa-solid fa-satellite-dish text-2xl"></i>
+                        <p class="text-xs">Nessun canale trovato</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(c => {
+                const isActive = currentChannel && currentChannel.id === c.id;
+                const isFav = favorites.includes(c.id);
+
+                return `
+                    <div onclick="playChannelById('${c.id}')" 
+                         class="p-3 flex items-center justify-between cursor-pointer hover:bg-dark-hover transition group ${isActive ? 'active-channel' : ''}">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <img src="${c.logo}" onerror="this.src='https://placehold.co/100x100/1e2638/ffffff?text=TV'" 
+                                 class="w-9 h-9 rounded-lg object-contain bg-black/40 p-1 border border-dark-border shrink-0">
+                            <div class="truncate">
+                                <h4 class="text-xs font-semibold ${isActive ? 'text-blue-400' : 'text-slate-200 group-hover:text-white'} truncate">${c.name}</h4>
+                                <p class="text-[10px] text-slate-500 truncate">${c.group}</p>
+                            </div>
+                        </div>
+                        <button onclick="event.stopPropagation(); toggleFavorite('${c.id}')" class="p-1.5 text-slate-600 hover:text-red-500 transition">
+                            <i class="${isFav ? 'fa-solid fa-heart text-red-500' : 'fa-regular fa-heart'}"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // MEDIA PLAYER CONTROL (HLS.JS & FALLBACK)
+        // ==========================================
+        function playChannelById(id) {
+            const found = channels.find(c => c.id === id);
+            if (found) playChannel(found);
+        }
+
+        function playChannel(channel) {
+            currentChannel = channel;
+            document.getElementById('corsNotice').classList.add('hidden');
+            document.getElementById('playerOverlay').classList.add('hidden');
+            document.getElementById('liveBadge').classList.remove('hidden');
+            document.getElementById('qualityBadge').classList.remove('hidden');
+
+            // Update UI info
+            document.getElementById('currentName').textContent = channel.name;
+            document.getElementById('currentGroup').textContent = channel.group;
+            document.getElementById('currentLogo').src = channel.logo;
+
+            updateFavCurrentBtn();
+            renderChannelList();
+            updateEPGDisplay();
+
+            const video = document.getElementById('videoPlayer');
+
+            if (Hls.isSupported() && channel.url.includes('.m3u8')) {
+                if (hlsPlayer) {
+                    hlsPlayer.destroy();
+                }
+                hlsPlayer = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                });
+                hlsPlayer.loadSource(channel.url);
+                hlsPlayer.attachMedia(video);
+                hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play().catch(e => console.log('Autoplay intercettato:', e));
+                });
+                hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        handleStreamError();
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari native HLS fallback
+                video.src = channel.url;
+                video.play().catch(handleStreamError);
+            } else {
+                // Direct video fallback
+                video.src = channel.url;
+                video.play().catch(handleStreamError);
+            }
+        }
+
+        function handleStreamError() {
+            document.getElementById('corsNotice').classList.remove('hidden');
+        }
+
+        function retryCurrentStream() {
+            if (currentChannel) playChannel(currentChannel);
+        }
+
+        function copyStreamUrl() {
+            if (!currentChannel) return;
+            const tempInput = document.createElement('input');
+            tempInput.value = currentChannel.url;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showToast('URL del flusso copiato negli appunti!');
+        }
+
+        function nextChannel() {
+            if (!currentChannel || channels.length === 0) return;
+            const idx = channels.findIndex(c => c.id === currentChannel.id);
+            const nextIdx = (idx + 1) % channels.length;
+            playChannel(channels[nextIdx]);
+        }
+
+        function prevChannel() {
+            if (!currentChannel || channels.length === 0) return;
+            const idx = channels.findIndex(c => c.id === currentChannel.id);
+            const prevIdx = (idx - 1 + channels.length) % channels.length;
+            playChannel(channels[prevIdx]);
+        }
+
+        function togglePlay() {
+            const video = document.getElementById('videoPlayer');
+            if (video.paused) video.play();
+            else video.pause();
+        }
+
+        function toggleFullscreen() {
+            const video = document.getElementById('videoPlayer');
+            if (!document.fullscreenElement) {
+                video.requestFullscreen().catch(err => alert(`Errore Schermo Intero: ${err.message}`));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // ==========================================
+        // FAVORITES SYSTEM
+        // ==========================================
+        function toggleFavorite(id) {
+            const idx = favorites.indexOf(id);
+            if (idx > -1) {
+                favorites.splice(idx, 1);
+                showToast('Rimosso dai preferiti');
+            } else {
+                favorites.push(id);
+                showToast('Aggiunto ai preferiti');
+            }
+            localStorage.setItem('iptv_favorites', JSON.stringify(favorites));
+            updateFavCurrentBtn();
+            renderChannelList();
+        }
+
+        function toggleFavoriteCurrent() {
+            if (currentChannel) toggleFavorite(currentChannel.id);
+        }
+
+        function updateFavCurrentBtn() {
+            if (!currentChannel) return;
+            const btn = document.getElementById('favCurrentBtn');
+            const isFav = favorites.includes(currentChannel.id);
+            btn.innerHTML = `<i class="${isFav ? 'fa-solid fa-heart text-red-500' : 'fa-regular fa-heart'}"></i>`;
+        }
+
+        // ==========================================
+        // EPG DISPLAY & TIMELINE UPDATER
+        // ==========================================
+        function updateEPGDisplay() {
+            if (!currentChannel) return;
+
+            const tvgId = currentChannel.tvgId || currentChannel.name;
+            const schedule = epgData[tvgId] || epgData[currentChannel.name];
+
+            const titleEl = document.getElementById('epgTitle');
+            const descEl = document.getElementById('epgDesc');
+            const timeBadge = document.getElementById('epgTimeBadge');
+            const nextTitleEl = document.getElementById('epgNextTitle');
+
+            if (!schedule || schedule.length === 0) {
+                titleEl.textContent = 'Programmazione Non Disponibile';
+                descEl.textContent = 'Nessuna informazione guida TV trovata per questo canale.';
+                timeBadge.textContent = '--:-- - --:--';
+                nextTitleEl.textContent = 'Nessuna informazione';
+                setEPGProgress(0, '--:--', '--:--');
+                return;
+            }
+
+            const now = new Date();
+            let currentProg = schedule.find(p => now >= p.startTime && now <= p.endTime);
+            
+            if (!currentProg) {
+                currentProg = schedule[0]; // Fallback to first available
+            }
+
+            const currentIdx = schedule.indexOf(currentProg);
+            const nextProg = schedule[currentIdx + 1];
+
+            titleEl.textContent = currentProg.title;
+            descEl.textContent = currentProg.desc;
+            
+            const startStr = formatTime(currentProg.startTime);
+            const endStr = formatTime(currentProg.endTime);
+            timeBadge.textContent = `${startStr} - ${endStr}`;
+
+            if (nextProg) {
+                nextProgTitle = `${formatTime(nextProg.startTime)} - ${nextProg.title}`;
+                nextTitleEl.textContent = nextProgTitle;
+            } else {
+                nextTitleEl.textContent = 'Fine palinsesto';
+            }
+
+            updateEPGProgress();
+        }
+
+        function updateEPGProgress() {
+            if (!currentChannel) return;
+            const tvgId = currentChannel.tvgId || currentChannel.name;
+            const schedule = epgData[tvgId] || epgData[currentChannel.name];
+            if (!schedule) return;
+
+            const now = new Date();
+            const currentProg = schedule.find(p => now >= p.startTime && now <= p.endTime);
+
+            if (currentProg) {
+                const total = currentProg.endTime - currentProg.startTime;
+                const elapsed = now - currentProg.startTime;
+                const pct = Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
+
+                setEPGProgress(pct, formatTime(currentProg.startTime), formatTime(currentProg.endTime));
+            } else {
+                setEPGProgress(0, '--:--', '--:--');
+            }
+        }
+
+        function setEPGProgress(pct, start, end) {
+            document.getElementById('epgProgressBar').style.width = pct + '%';
+            document.getElementById('epgProgressPercent').textContent = pct + '%';
+            document.getElementById('epgStartTime').textContent = start;
+            document.getElementById('epgEndTime').textContent = end;
+        }
+
+        function formatTime(date) {
+            if (!(date instanceof Date) || isNaN(date)) return '--:--';
+            return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function renderFullEPGGrid() {
+            const container = document.getElementById('guideGridContent');
+            if (channels.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 text-xs">Nessun canale caricato.</p>`;
+                return;
+            }
+
+            container.innerHTML = channels.map(c => {
+                const tvgId = c.tvgId || c.name;
+                const schedule = epgData[tvgId] || [];
+
+                return `
+                    <div class="p-4 rounded-xl glass-panel space-y-3">
+                        <div class="flex items-center gap-3">
+                            <img src="${c.logo}" onerror="this.src='https://placehold.co/100x100/1e2638/ffffff?text=TV'" class="w-8 h-8 rounded object-contain bg-black/40 p-1">
+                            <h3 class="font-bold text-sm text-white">${c.name}</h3>
+                            <span class="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">${c.group}</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            ${schedule.length > 0 ? schedule.slice(0, 3).map(p => `
+                                <div class="bg-dark-bg/60 p-2.5 rounded-lg border border-dark-border text-xs">
+                                    <div class="font-mono text-[10px] text-blue-400 font-semibold mb-1">${formatTime(p.startTime)} - ${formatTime(p.endTime)}</div>
+                                    <div class="font-bold text-slate-200 truncate">${p.title}</div>
+                                    <div class="text-[11px] text-slate-400 line-clamp-2 mt-0.5">${p.desc}</div>
+                                </div>
+                            `).join('') : '<p class="text-xs text-slate-500 col-span-3">Nessun palinsesto disponibile.</p>'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // UI HELPERS & MODALS
+        // ==========================================
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'guideModal') renderFullEPGGrid();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function switchModalTab(tab) {
+            const m3uTab = document.getElementById('tabM3u');
+            const epgTab = document.getElementById('tabEpg');
+            const m3uBtn = document.getElementById('tabM3uBtn');
+            const epgBtn = document.getElementById('tabEpgBtn');
+
+            if (tab === 'm3u') {
+                m3uTab.classList.remove('hidden');
+                epgTab.classList.add('hidden');
+                m3uBtn.className = "flex-1 py-2 text-xs font-bold border-b-2 border-blue-500 text-blue-400";
+                epgBtn.className = "flex-1 py-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-white";
+            } else {
+                epgTab.classList.remove('hidden');
+                m3uTab.classList.add('hidden');
+                epgBtn.className = "flex-1 py-2 text-xs font-bold border-b-2 border-blue-500 text-blue-400";
+                m3uBtn.className = "flex-1 py-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-white";
+            }
+        }
+
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            toastMsg.textContent = msg;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
